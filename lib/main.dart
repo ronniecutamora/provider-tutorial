@@ -1,44 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// 1. THE SOURCE: ThemeProvider (ChangeNotifier)
-class ThemeProvider extends ChangeNotifier {
-  String _colorName = "Blue";
-  Color _actualColor = Colors.blue;
+// 1. THE SOURCE: LanguageProvider
+class LanguageProvider extends ChangeNotifier {
+  String _currentLang = "EN";
+  String get currentLang => _currentLang;
 
-  String get colorName => _colorName;
-  Color get actualColor => _actualColor;
-
-  void switchToRed() {
-    _colorName = "Red";
-    _actualColor = Colors.red;
-    notifyListeners();
+  void toggleLanguage() {
+    _currentLang = (_currentLang == "EN") ? "FR" : "EN";
+    notifyListeners(); // Tells ProxyProvider to update
   }
 }
 
-// 2. THE DEPENDENT: AppSettings (Simple Class - NO ChangeNotifier)
-// This class is just a "container" for data.
-class AppSettings {
-  final String themeTitle;
-  final Color displayColor;
+// 2. THE DEPENDENT: TranslationsService (Also a ChangeNotifier!)
+class TranslationsService extends ChangeNotifier {
+  String _lang = "EN";
+  
+  // Our simple dictionary
+  final Map<String, Map<String, String>> _data = {
+    "EN": {"hello": "Hello", "subtitle": "Welcome to our app"},
+    "FR": {"hello": "Bonjour", "subtitle": "Bienvenue dans notre application"},
+  };
 
-  AppSettings({required this.themeTitle, required this.displayColor});
+  // Called by ProxyProvider
+  void updateLanguage(String newLang) {
+    if (_lang != newLang) {
+      _lang = newLang;
+      // We could do an API call or load a JSON file here!
+      notifyListeners(); // Tells the UI to turn French
+    }
+  }
+
+  String translate(String key) => _data[_lang]?[key] ?? key;
 }
 
-// 3. THE MAIN SETUP
+// 3. THE SETUP
 void main() {
   runApp(
     MultiProvider(
       providers: [
-        // Source Provider
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
         
-        // ProxyProvider: Listens to ThemeProvider, creates AppSettings
-        ProxyProvider<ThemeProvider, AppSettings>(
-          update: (context, theme, previous) => AppSettings(
-            themeTitle: "Current Mood: ${theme.colorName}",
-            displayColor: theme.actualColor,
-          ),
+        // This bridge watches LanguageProvider and updates TranslationsService
+        ChangeNotifierProxyProvider<LanguageProvider, TranslationsService>(
+          create: (_) => TranslationsService(),
+          update: (context, langProvider, transService) {
+            return transService!..updateLanguage(langProvider.currentLang);
+          },
         ),
       ],
       child: const MyApp(),
@@ -52,22 +60,29 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We listen to the Simple Class (AppSettings), NOT the ThemeProvider directly
-    final settings = context.watch<AppSettings>();
+    // We only need to watch the Translation service for the text
+    final translator = context.watch<TranslationsService>();
 
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(
-          title: Text(settings.themeTitle),
-          backgroundColor: settings.displayColor,
-        ),
+        appBar: AppBar(title: Text(translator.translate("hello"))),
         body: Center(
-          child: ElevatedButton(
-            onPressed: () {
-              // We change the source, and ProxyProvider updates the Dependent
-              context.read<ThemeProvider>().switchToRed();
-            },
-            child: const Text("Switch Theme Source"),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                translator.translate("subtitle"),
+                style: const TextStyle(fontSize: 20),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  // We read the Language provider to trigger the change
+                  context.read<LanguageProvider>().toggleLanguage();
+                },
+                child: const Text("Switch Language"),
+              ),
+            ],
           ),
         ),
       ),
