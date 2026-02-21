@@ -1,89 +1,105 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// 1. THE DATA (Weather Station)
-class WeatherProvider extends ChangeNotifier {
-  double _temp = 25.0;
-  double _humidity = 60.0;
+// 1. THE PARENT: AuthProvider (The Rain Sensor)
+class AuthProvider extends ChangeNotifier {
+  String? _userId;
+  String? get userId => _userId;
 
-  double get temp => _temp;
-  double get humidity => _humidity;
-
-  void changeTemp() {
-    _temp++;
+  void login(String id) {
+    _userId = id;
+    print("Auth: User logged in as $id");
     notifyListeners();
   }
 
-  void changeHumidity() {
-    _humidity++;
+  void logout() {
+    _userId = null;
     notifyListeners();
   }
 }
 
-// 2. THE MAIN METHOD (The Engine)
+// 2. THE DEPENDENT: CartProvider (The Sprinkler)
+class CartProvider extends ChangeNotifier {
+  String? _currentUserId;
+  List<String> _items = [];
+
+  List<String> get items => _items;
+
+  // This is the method the ProxyProvider will call
+  void updateUserId(String? newId) {
+    // Only fetch if the ID actually changed to avoid infinite loops
+    if (_currentUserId != newId) {
+      _currentUserId = newId;
+      _fetchUserCart();
+    }
+  }
+
+  void _fetchUserCart() {
+    if (_currentUserId == null) {
+      _items = [];
+    } else {
+      // Mocking a database fetch
+      _items = ["Laptop for $_currentUserId", "Mouse for $_currentUserId"];
+    }
+    notifyListeners();
+  }
+}
+
+// 3. THE MAIN SETUP
 void main() {
   runApp(
-    // We must provide the WeatherProvider at the very top!
-    ChangeNotifierProvider(
-      create: (_) => WeatherProvider(),
-      child: const MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: PerformanceScreen(),
-      ),
+    MultiProvider(
+      providers: [
+        // Parent must be first
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        
+        // Dependent uses ProxyProvider
+        ChangeNotifierProxyProvider<AuthProvider, CartProvider>(
+          create: (_) => CartProvider(),
+          update: (context, auth, cart) {
+            // We 'inject' the userId from Auth into the Cart
+            return cart!..updateUserId(auth.userId);
+          },
+        ),
+      ],
+      child: const MaterialApp(home: ProxyScreen()),
     ),
   );
 }
 
-// 3. THE UI
-class PerformanceScreen extends StatelessWidget {
-  const PerformanceScreen({super.key});
+// 4. THE UI
+class ProxyScreen extends StatelessWidget {
+  const ProxyScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // This print will ONLY run once when the app starts.
-    print("Main build method: I am staying still! ✅");
+    final auth = context.watch<AuthProvider>();
+    final cart = context.watch<CartProvider>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Consumer vs Selector")),
+      appBar: AppBar(title: const Text("ProxyProvider Bridge")),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // --- THE CONSUMER (Soundproof Booth) ---
-            Consumer<WeatherProvider>(
-              builder: (context, weather, child) {
-                print("Consumer: Rebuilding for ANY change...");
-                return Text(
-                  "Humidity: ${weather.humidity}%",
-                  style: const TextStyle(fontSize: 20),
-                );
-              },
+            Text(
+              auth.userId == null ? "Status: Logged Out" : "User ID: ${auth.userId}",
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-
-            const SizedBox(height: 20),
-
-            // --- THE SELECTOR (Smart Filter) ---
-            Selector<WeatherProvider, double>(
-              selector: (context, weather) => weather.temp,
-              builder: (context, temp, child) {
-                print("Selector: Rebuilding ONLY for Temp! 🔥");
-                return Text(
-                  "Temperature: $temp°C", 
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)
-                );
-              },
-            ),
-
-            const SizedBox(height: 40),
-
-            ElevatedButton(
-              onPressed: () => context.read<WeatherProvider>().changeTemp(),
-              child: const Text("Change Temp (Both Rebuild)"),
-            ),
-            ElevatedButton(
-              onPressed: () => context.read<WeatherProvider>().changeHumidity(),
-              child: const Text("Change Humidity (Only Consumer Rebuilds)"),
-            ),
+            const Divider(),
+            ...cart.items.map((item) => Text(item)).toList(),
+            const SizedBox(height: 30),
+            
+            if (auth.userId == null)
+              ElevatedButton(
+                onPressed: () => context.read<AuthProvider>().login("User_99"),
+                child: const Text("Login as User_99"),
+              )
+            else
+              ElevatedButton(
+                onPressed: () => context.read<AuthProvider>().logout(),
+                child: const Text("Logout"),
+              ),
           ],
         ),
       ),
