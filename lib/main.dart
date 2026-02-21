@@ -1,76 +1,56 @@
-// 2. THE MALL SETUP (Main)
 import 'package:flutter/material.dart';
-import 'package:my_provider/providers.dart';
 import 'package:provider/provider.dart';
 
+// 1. THE DATA (ChangeNotifier)
+class UserProvider extends ChangeNotifier {
+  String _name = "Guest";
+  String get name => _name;
+
+  void changeName(String newName) {
+    _name = newName;
+    notifyListeners(); // This is the 'shout' that watch() hears!
+  }
+}
+
+// 2. THE APP SETUP
 void main() {
   runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => CartProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-      ],
-      child: const MyApp(),
+    ChangeNotifierProvider(
+      create: (_) => UserProvider(),
+      child: const MaterialApp(home: WatchReadScreen()),
     ),
   );
 }
 
 // 3. THE UI
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class WatchReadScreen extends StatelessWidget {
+  const WatchReadScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Listen to ThemeProvider to change the look of the whole app
-    final theme = context.watch<ThemeProvider>();
+    // PRINT TO CONSOLE: This shows us when the WHOLE build method runs
+    print("Building the entire Screen widget!");
 
-    return MaterialApp(
-      theme: theme.isDark ? ThemeData.dark() : ThemeData.light(),
-      home: const MultiProviderScreen(),
-    );
-  }
-}
+    // WATCH: Staring at the screen. 
+    // This widget will rebuild every time notifyListeners() is called.
+    final String currentName = context.watch<UserProvider>().name;
 
-class MultiProviderScreen extends StatelessWidget {
-  const MultiProviderScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("MultiProvider Mall")),
+      appBar: AppBar(title: const Text("Watch vs Read Demo")),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Listening to AuthProvider
-            Consumer<AuthProvider>(
-              builder: (ctx, auth, _) => Text(
-                auth.isLoggedIn ? "Welcome back, User! ✅" : "Please log in. ❌",
-                style: const TextStyle(fontSize: 20),
-              ),
-            ),
+            Text("Hello, $currentName!", style: const TextStyle(fontSize: 30)),
             const SizedBox(height: 20),
             
-            // Listening to CartProvider
-            Consumer<CartProvider>(
-              builder: (ctx, cart, _) => Text("Items in Mall Cart: ${cart.count}"),
-            ),
-            
-            const SizedBox(height: 40),
-            
-            // Buttons to trigger changes
             ElevatedButton(
-              onPressed: () => context.read<AuthProvider>().toggleLogin(),
-              child: const Text("Toggle Login"),
-            ),
-            ElevatedButton(
-              onPressed: () => context.read<CartProvider>().add(),
-              child: const Text("Add to Cart"),
-            ),
-            ElevatedButton(
-              onPressed: () => context.read<ThemeProvider>().toggleTheme(),
-              child: const Text("Switch Theme"),
+              onPressed: () {
+                // READ: Taking a Polaroid.
+                // We don't need to rebuild the button, we just want to call the method.
+                context.read<UserProvider>().changeName("Flutter Hero");
+              },
+              child: const Text("Change Name to Hero"),
             ),
           ],
         ),
