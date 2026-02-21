@@ -1,48 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// 1. THE PARENT: AuthProvider (The Rain Sensor)
-class AuthProvider extends ChangeNotifier {
-  String? _userId;
-  String? get userId => _userId;
+// 1. THE SOURCE: ThemeProvider (ChangeNotifier)
+class ThemeProvider extends ChangeNotifier {
+  String _colorName = "Blue";
+  Color _actualColor = Colors.blue;
 
-  void login(String id) {
-    _userId = id;
-    print("Auth: User logged in as $id");
-    notifyListeners();
-  }
+  String get colorName => _colorName;
+  Color get actualColor => _actualColor;
 
-  void logout() {
-    _userId = null;
+  void switchToRed() {
+    _colorName = "Red";
+    _actualColor = Colors.red;
     notifyListeners();
   }
 }
 
-// 2. THE DEPENDENT: CartProvider (The Sprinkler)
-class CartProvider extends ChangeNotifier {
-  String? _currentUserId;
-  List<String> _items = [];
+// 2. THE DEPENDENT: AppSettings (Simple Class - NO ChangeNotifier)
+// This class is just a "container" for data.
+class AppSettings {
+  final String themeTitle;
+  final Color displayColor;
 
-  List<String> get items => _items;
-
-  // This is the method the ProxyProvider will call
-  void updateUserId(String? newId) {
-    // Only fetch if the ID actually changed to avoid infinite loops
-    if (_currentUserId != newId) {
-      _currentUserId = newId;
-      _fetchUserCart();
-    }
-  }
-
-  void _fetchUserCart() {
-    if (_currentUserId == null) {
-      _items = [];
-    } else {
-      // Mocking a database fetch
-      _items = ["Laptop for $_currentUserId", "Mouse for $_currentUserId"];
-    }
-    notifyListeners();
-  }
+  AppSettings({required this.themeTitle, required this.displayColor});
 }
 
 // 3. THE MAIN SETUP
@@ -50,57 +30,45 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
-        // Parent must be first
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // Source Provider
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         
-        // Dependent uses ProxyProvider
-        ChangeNotifierProxyProvider<AuthProvider, CartProvider>(
-          create: (_) => CartProvider(),
-          update: (context, auth, cart) {
-            // We 'inject' the userId from Auth into the Cart
-            return cart!..updateUserId(auth.userId);
-          },
+        // ProxyProvider: Listens to ThemeProvider, creates AppSettings
+        ProxyProvider<ThemeProvider, AppSettings>(
+          update: (context, theme, previous) => AppSettings(
+            themeTitle: "Current Mood: ${theme.colorName}",
+            displayColor: theme.actualColor,
+          ),
         ),
       ],
-      child: const MaterialApp(home: ProxyScreen()),
+      child: const MyApp(),
     ),
   );
 }
 
 // 4. THE UI
-class ProxyScreen extends StatelessWidget {
-  const ProxyScreen({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final cart = context.watch<CartProvider>();
+    // We listen to the Simple Class (AppSettings), NOT the ThemeProvider directly
+    final settings = context.watch<AppSettings>();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text("ProxyProvider Bridge")),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              auth.userId == null ? "Status: Logged Out" : "User ID: ${auth.userId}",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const Divider(),
-            ...cart.items.map((item) => Text(item)).toList(),
-            const SizedBox(height: 30),
-            
-            if (auth.userId == null)
-              ElevatedButton(
-                onPressed: () => context.read<AuthProvider>().login("User_99"),
-                child: const Text("Login as User_99"),
-              )
-            else
-              ElevatedButton(
-                onPressed: () => context.read<AuthProvider>().logout(),
-                child: const Text("Logout"),
-              ),
-          ],
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text(settings.themeTitle),
+          backgroundColor: settings.displayColor,
+        ),
+        body: Center(
+          child: ElevatedButton(
+            onPressed: () {
+              // We change the source, and ProxyProvider updates the Dependent
+              context.read<ThemeProvider>().switchToRed();
+            },
+            child: const Text("Switch Theme Source"),
+          ),
         ),
       ),
     );
