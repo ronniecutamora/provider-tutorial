@@ -1,63 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'cart_provider.dart';
+import 'counter_provider.dart';
 
 void main() {
   runApp(
+    // Wrap the whole app so the Counter is available everywhere
     ChangeNotifierProvider(
-      create: (context) => CartProvider(),
-      child: const MaterialApp(home: StoreScreen(), debugShowCheckedModeBanner: false,),
+      create: (context) => CounterProvider(),
+      child: const MaterialApp(home: CounterScreen()),
     ),
   );
 }
 
-class StoreScreen extends StatelessWidget {
-  const StoreScreen({super.key});
+class CounterScreen extends StatelessWidget {
+  const CounterScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Fruit Shop"),
-        actions: [
-          // THE BADGE: This listens specifically for changes in the cart
-          Consumer<CartProvider>(
-            builder: (context, cart, child) {
-              return Badge(
-                label: Text('${cart.items.length}'),
-                child: const Icon(Icons.shopping_cart),
-              );
-            },
-          ),
-          const SizedBox(width: 20),
-        ],
+      appBar: AppBar(title: const Text("Simple Counter")),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text("You have pushed the button this many times:"),
+            
+            // THE CONSUMER: This is the specific "Radio" tuning in.
+            // Only this Text widget rebuilds when notifyListeners() is called.
+            Consumer<CounterProvider>(
+              builder: (context, counter, child) => Text(
+                '${counter.count}',
+                style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
       ),
-      body: ListView(
-        children: [
-          _ProductTile(product: Product(name: "Apple", price: 1.50)),
-          _ProductTile(product: Product(name: "Banana", price: 0.80)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProductTile extends StatelessWidget {
-  final Product product;
-  const _ProductTile({required this.product});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(product.name),
-      subtitle: Text("\$${product.price}"),
-      trailing: IconButton(
-        icon: const Icon(Icons.add_shopping_cart),
+      floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // We use context.read here because we just want to CALL a function,
-          // we don't need this specific button to rebuild itself.
-          context.read<CartProvider>().addToCart(product);
+          // Use context.read to trigger the action.
+          // We don't need the button to rebuild, just to "DO" something.
+          context.read<CounterProvider>().increment();
         },
+        child: const Icon(Icons.add),
       ),
     );
   }
